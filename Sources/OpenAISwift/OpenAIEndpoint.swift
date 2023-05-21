@@ -11,6 +11,12 @@ enum Endpoint {
     case images
     case embeddings
     case moderations
+    case transcriptions
+}
+
+enum Encoding {
+    case json
+    case multipartForm
 }
 
 extension Endpoint {
@@ -28,19 +34,30 @@ extension Endpoint {
                 return "/v1/embeddings"
             case .moderations:
                 return "/v1/moderations"
+            case .transcriptions:
+                return "/v1/audio/transcriptions"
+        }
+    }
+    
+    var encoding: Encoding {
+        switch self {
+        case .completions, .edits, .chat, .images, .embeddings, .moderations:
+            return .json
+        case .transcriptions:
+            return .multipartForm
         }
     }
     
     var method: String {
         switch self {
-            case .completions, .edits, .chat, .images, .embeddings, .moderations:
+            case .completions, .edits, .chat, .images, .embeddings, .moderations, .transcriptions:
             return "POST"
         }
     }
     
     func baseURL() -> String {
         switch self {
-            case .completions, .edits, .chat, .images, .embeddings, .moderations:
+            case .completions, .edits, .chat, .images, .embeddings, .moderations, .transcriptions:
             return "https://api.openai.com"
         }
     }

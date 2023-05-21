@@ -3,6 +3,7 @@ import Foundation
 import FoundationNetworking
 import FoundationXML
 #endif
+import MultipartKit
 
 public enum OpenAIError: Error {
     case genericError(error: Error)
@@ -228,6 +229,36 @@ extension OpenAISwift {
         }
     }
     
+    /// Send an audio transcription request to the OpenAI API
+    /// - Parameters:
+    ///   - fileUrl: File uploads are currently limited to 25 MB and the following input file types are supported: mp3, mp4, mpeg, mpga, m4a, wav, and webm.
+    ///   - prompt: An optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.
+    ///   - temperature: The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. If set to 0, the model will use log probability to automatically increase the temperature until certain thresholds are hit.
+    ///   - language: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+    ///   - model: ID of the model to use. Only whisper-1 is currently available.
+    ///   - completionHandler: Returns an OpenAI Data Model
+    @available(swift 5.5)
+    @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+    public func sendTranscriptions(with data: Data, prompt: String? = nil, temperature: Double = 0, language: String = "en", model: OpenAIModelType.Transcription = .whisper_1, completionHandler: @escaping (Result<TranscriptionResult, OpenAIError>) -> Void) {
+        let endpoint = Endpoint.transcriptions
+        let body = Transcriptions(file: data, prompt: prompt, temperature: temperature, language: language, model: model.rawValue)
+        let request = prepareRequest(endpoint, body: body)
+
+        makeRequest(request: request) { result in
+            switch result {
+                case .success(let success):
+                    do {
+                        let res = try JSONDecoder().decode(TranscriptionResult.self, from: success)
+                        completionHandler(.success(res))
+                    } catch {
+                        completionHandler(.failure(.decodingError(error: error)))
+                    }
+                case .failure(let failure):
+                    completionHandler(.failure(.genericError(error: failure)))
+                }
+        }
+    }
+    
     private func makeRequest(request: URLRequest, completionHandler: @escaping (Result<Data, Error>) -> Void) {
         let session = config.session
         let task = session.dataTask(with: request) { (data, response, error) in
@@ -251,10 +282,28 @@ extension OpenAISwift {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        
-        let encoder = JSONEncoder()
-        if let encoded = try? encoder.encode(body) {
+
+        let encoded: Data?
+        switch endpoint.encoding {
+        case .json:
+            request.setValue("application/json", forHTTPHeaderField: "content-type")
+            let encoder = JSONEncoder()
+            encoded = try? encoder.encode(body)
+        case .multipartForm:
+            let boundary = UUID().uuidString
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-type")
+            let encoder = FormDataEncoder()
+            var buffer = ByteBuffer()
+            if let _ = try? encoder.encode(body, boundary: boundary, into: &buffer) {
+                encoded = Data(buffer.readableBytesView)
+                if let encoded {
+                    request.setValue("\(encoded.count)", forHTTPHeaderField: "Content-Length")
+                }
+            } else {
+                encoded = nil
+            }
+        }
+        if let encoded {
             request.httpBody = encoded
         }
         
@@ -386,6 +435,24 @@ extension OpenAISwift {
     public func sendImages(with prompt: String, numImages: Int = 1, size: ImageSize = .size1024, user: String? = nil) async throws -> OpenAI<UrlResult> {
         return try await withCheckedThrowingContinuation { continuation in
             sendImages(with: prompt, numImages: numImages, size: size, user: user) { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+    
+    /// Send an audio transcription request to the OpenAI API
+    /// - Parameters:
+    ///   - fileUrl: File uploads are currently limited to 25 MB and the following input file types are supported: mp3, mp4, mpeg, mpga, m4a, wav, and webm.
+    ///   - prompt: An optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.
+    ///   - temperature: The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. If set to 0, the model will use log probability to automatically increase the temperature until certain thresholds are hit.
+    ///   - language: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+    ///   - model: ID of the model to use. Only whisper-1 is currently available.
+    /// - Returns: Returns an OpenAI Data Model
+    @available(swift 5.5)
+    @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+    public func sendTranscriptions(with data: Data, prompt: String? = nil, temperature: Double = 0, language: String = "en", model: OpenAIModelType.Transcription = .whisper_1) async throws -> TranscriptionResult {
+        return try await withCheckedThrowingContinuation { continuation in
+            sendTranscriptions(with: data, prompt: prompt, temperature: temperature, language: language, model: model) { result in
                 continuation.resume(with: result)
             }
         }

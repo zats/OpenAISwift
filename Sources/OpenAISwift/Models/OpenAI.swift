@@ -46,3 +46,7 @@ public struct EmbeddingResult: Payload {
 public struct ModerationResult: Payload {
     public let flagged: Bool?
 }
+
+public struct TranscriptionResult: Payload {
+    public let text: String
+}

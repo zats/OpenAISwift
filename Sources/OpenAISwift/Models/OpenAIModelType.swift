@@ -30,6 +30,8 @@ public enum OpenAIModelType {
     /// ``Moderation`` Family of Models
     case moderation(Moderation)
     
+    case transcription(Transcription)
+    
     /// Other Custom Models
     case other(String)
     
@@ -42,6 +44,7 @@ public enum OpenAIModelType {
         case .chat(let model): return model.rawValue
         case .embedding(let model): return model.rawValue
         case .moderation(let model): return model.rawValue
+        case .transcription(let model): return model.rawValue
         case .other(let modelName): return modelName
         }
     }
@@ -156,5 +159,9 @@ public enum OpenAIModelType {
         /// OpenAI will provide advanced notice before updating this model.
         /// Accuracy  may be slightly lower than for text-moderation-latest.
         case stable = "text-moderation-stable"
+    }
+    
+    public enum Transcription: String {
+        case whisper_1 = "whisper-1"
     }
 }
